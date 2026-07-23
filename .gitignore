@@ -27,3 +27,9 @@ poetry.lock
 # Ignore generated docs
 docs/_build
 docs/api
+
+.uvbin
+.venv
+.venv-hf
+.python
+dataset
