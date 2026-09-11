@@ -33,3 +33,4 @@ docs/api
 .venv-hf
 .python
 dataset
+logs
