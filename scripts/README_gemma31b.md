@@ -309,3 +309,18 @@ dataset/gemma_edited_frame_consistency.jsonl.rank1.jsonl
 - `--max-items` 在任务分片前生效，表示所有 rank 合计的最大任务数，而不是每个 rank 的数量。
 - 同一路径下的 rank 临时文件属于断点状态。想进行全新实验时，建议改用新的输出文件名，以免混入旧结果。
 - 一致性检查的输入包含多张图片，显存占用会随 `--batch-size`、`--max-peers` 和图片尺寸上升；出现 OOM 时优先保持 `--batch-size 1`，再减小 `--max-peers`。
+
+
+## 审核 MASt3R 筛选后的统一多视角 jobs
+
+Hunyuan 的 `build_filtered_keyframe_jobs.py` 将 `filtered.json` 和 Gemma bbox 转为统一 jobs。生成完成后，在 Gemma 仓库执行：
+
+```bash
+.venv/bin/python scripts/gemma31b_edited_frame_consistency.py \
+  --prepare-only \
+  --jobs dataset/s2v_keyframe_recontext/jobs.filtered.jsonl \
+  --generation-root dataset/s2v_object_only-hunyuan-distil/filtered \
+  --worklist dataset/gemma_filtered_consistency.jobs.jsonl
+```
+
+`--jobs` 与 `--generation-root` 必须同时提供，替代旧的 main/extra 输入；旧参数仍兼容。审核按 `sample_id + entity_id` 分组，仅关联实际存在的生成图片。确认 `matched_outputs` 后用 `--reuse-worklist` 和同一个 `--worklist` 执行推理，指定 `--model` 与独立的 `--output-jsonl`。建议各仓库使用独立 `.venv` 环境。

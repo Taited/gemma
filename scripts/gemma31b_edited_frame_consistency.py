@@ -92,22 +92,35 @@ def existing_path(raw, root, kind):
 
 
 def build_worklist(args):
-    source_rows = [("anchor", r) for r in read_jsonl(args.main_jobs)]
-    source_rows += [("extra", r) for r in read_jsonl(args.extra_jobs)]
+    unified_jobs = getattr(args, "jobs", None)
+    generation_root = getattr(args, "generation_root", None)
+    if bool(unified_jobs) != bool(generation_root):
+        raise ValueError("--jobs and --generation-root must be supplied together")
+    if unified_jobs:
+        source_rows = [("anchor" if r.get("is_anchor") else "extra", r)
+                       for r in read_jsonl(unified_jobs)]
+        roots = {"anchor": generation_root, "extra": generation_root}
+    else:
+        source_rows = [("anchor", r) for r in read_jsonl(args.main_jobs)]
+        source_rows += [("extra", r) for r in read_jsonl(args.extra_jobs)]
+        roots = {"anchor": args.main_root, "extra": args.extra_root}
     source = {}
     for view_type, row in source_rows:
+        if row["job_name"] in source:
+            raise ValueError(f"Duplicate source job_name: {row['job_name']}")
         item = dict(row)
         item["view_type"] = view_type
         source[row["job_name"]] = item
 
-    manifests = find_manifest_rows(args.main_root)
-    manifests += find_manifest_rows(args.extra_root)
+    manifests = []
+    for root in dict.fromkeys(roots.values()):
+        manifests.extend(find_manifest_rows(root))
     generated = {}
     for row in manifests:
         key = row.get("source_job_name")
         if key and key in source and row.get("output_path"):
             # Prefer an actually present output if duplicate/resumed manifests exist.
-            root = args.extra_root if source[key]["view_type"] == "extra" else args.main_root
+            root = roots[source[key]["view_type"]]
             output = existing_path(row.get("output_path"), root, "edited")
             model_input = existing_path(row.get("model_input_path"), root,
                                         "reference_inputs")
@@ -316,6 +329,10 @@ def merge_outputs(output, world):
 def parse_args():
     ap = argparse.ArgumentParser()
     ap.add_argument("--model", default=DEFAULT_MODEL)
+    ap.add_argument("--jobs", type=Path,
+                    help="Unified multi-view jobs; overrides legacy main/extra inputs")
+    ap.add_argument("--generation-root", type=Path,
+                    help="Single Hunyuan output root; required with --jobs")
     ap.add_argument("--main-jobs", type=Path, default=DEFAULT_MAIN_JOBS)
     ap.add_argument("--extra-jobs", type=Path, default=DEFAULT_EXTRA_JOBS)
     ap.add_argument("--main-root", type=Path, default=DEFAULT_MAIN_ROOT)
